@@ -46,6 +46,6 @@ After the data has been gathered, it is time to plot an image from it!
 
 Step 1: Run the 'Image Assembler.py' file, this will open a small GUI.
 
-Step 2: Press 'Select Folder' and select the folder that contains the recorded data file.
+Step 2: Press 'Select JSON File' and select the file that the data collection program outputted after it finished running.
 
 After you press 'select' on file explorer, it will then generate and display the image on-screen. Save it by pressing the save icon in the bottom of the window and saving like a normal file.
