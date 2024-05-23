@@ -21,7 +21,7 @@ This will install Python as well as the other dependencies for this program.
 
 The 'Position Recenter.py' file will command the mount to point at RA: 0.0 and DEC: 0.0. NOT at the center of the scan grid.
 
-The GUI window status updates will always be 1 grid position BEHIND what is actually happening. E.g: grid position 4 slew announcement only happens AFTER its finished slewing and arrived at position 5.
+The GUI window status updates will always be 1 grid position BEHIND what is actually happening. E.g: grid position 4 slew announcement only happens AFTER it has finished with the datapoint and begun the slew to position 5.
 
 
 
