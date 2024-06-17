@@ -9,6 +9,8 @@ Also, this would have been extremely hard to do without the assistance from Chat
 H1.I.M.E is pretty straightforward and simple but the most important thing to mention is: 
 This software is setup to use the driver "EQMOD.Telescope". It will be possible to modify the code to use your driver if necessary but otherwise you're out of luck.
 
+Also please note, please do not modify any of the other code.
+
 
 
 -Installation-
