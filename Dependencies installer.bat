@@ -28,6 +28,9 @@ REM Upgrade pip
 python -m ensurepip
 python -m pip install --upgrade pip
 
+REM Install necessary Python packages
+pip install numpy matplotlib pillow tk pyrtlsdr pywin32
+
 REM Set the librtlsdr directory path (relative to script location)
 set "LIBRTLSDR_DIR=%CURDIR%\lib\rtl-sdr-64bit"
 
