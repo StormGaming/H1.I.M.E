@@ -12,6 +12,7 @@ import sys
 from datetime import datetime
 import traceback
 import asyncio
+import math
 
 # Global variables for Data Collection
 output_folder = ""
@@ -36,7 +37,7 @@ TELESCOPE_DRIVERS = [
 ]
 
 # Modes for the combobox
-MODES = ["Data Collection", "Image Assembly", "Slew Tool"]
+MODES = ["Data Collection", "Image Assembly", "Slew Tool", "Calculators"]
 
 # Utility class for redirecting stdout to GUI
 class StdoutRedirector:
@@ -429,6 +430,17 @@ def generate_image(data_points, grid_spacing):
     plt.ylabel('Declination')
     plt.show()
 
+# Calculator functions
+def calculate_grid_spacing(wavelength, diameter, overlap):
+    try:
+        # Convert overlap percentage to decimal
+        overlap_decimal = overlap / 100
+        # Equation: (1.22 * (wavelengthM / diameterM) * (180 / pi) * (1 - overlapP))
+        grid_spacing = 1.22 * (wavelength / diameter) * (180 / math.pi) * (1 - overlap_decimal)
+        return grid_spacing
+    except Exception as e:
+        raise ValueError(f"Error calculating grid spacing: {str(e)}")
+
 # GUI functions
 def select_output_folder(folder_label):
     global output_folder
@@ -675,6 +687,65 @@ def create_slew_tool_frame(parent, root, log_text):
 
     return frame
 
+def create_calculators_frame(parent, root, log_text):
+    frame = ttk.LabelFrame(parent, text="Calculators", padding="5")
+    
+    # Grid Spacing Calculator
+    calc_frame = ttk.LabelFrame(frame, text="Grid Spacing Calculator", padding="5")
+    calc_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=5)
+    
+    # Input fields
+    ttk.Label(calc_frame, text="Wavelength (meters):").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+    wavelength_entry = ttk.Entry(calc_frame, width=15)
+    wavelength_entry.grid(row=0, column=1, sticky=tk.W, padx=5, pady=2)
+    
+    ttk.Label(calc_frame, text="Dish Diameter (meters):").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+    diameter_entry = ttk.Entry(calc_frame, width=15)
+    diameter_entry.grid(row=1, column=1, sticky=tk.W, padx=5, pady=2)
+    
+    ttk.Label(calc_frame, text="Overlap Percentage (%):").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
+    overlap_entry = ttk.Entry(calc_frame, width=15)
+    overlap_entry.grid(row=2, column=1, sticky=tk.W, padx=5, pady=2)
+    
+    # Result display
+    result_label = ttk.Label(calc_frame, text="Grid Spacing: Not calculated")
+    result_label.grid(row=3, column=0, columnspan=2, pady=5)
+    
+    # Control and Status
+    control_frame = ttk.Frame(calc_frame)
+    control_frame.grid(row=4, column=0, columnspan=2, pady=10)
+    calculate_button = ttk.Button(control_frame, text="Calculate", command=lambda: calculate_grid_spacing_action(root, wavelength_entry, diameter_entry, overlap_entry, result_label))
+    calculate_button.grid(row=0, column=0, padx=5)
+    status_label = ttk.Label(control_frame, text="Idle")
+    status_label.grid(row=0, column=1, padx=5)
+
+    def calculate_grid_spacing_action(root, wavelength_entry, diameter_entry, overlap_entry, result_label):
+        try:
+            wavelength = float(wavelength_entry.get())
+            diameter = float(diameter_entry.get())
+            overlap = float(overlap_entry.get())
+            
+            if wavelength <= 0:
+                raise ValueError("Wavelength must be positive")
+            if diameter <= 0:
+                raise ValueError("Dish diameter must be positive")
+            if not (0 <= overlap <= 100):
+                raise ValueError("Overlap percentage must be between 0 and 100")
+                
+            grid_spacing = calculate_grid_spacing(wavelength, diameter, overlap)
+            result_label.config(text=f"Grid Spacing: {grid_spacing:.4f} degrees")
+            status_label.config(text="Calculation successful")
+            print(f"Calculated grid spacing: {grid_spacing:.4f} degrees")
+            root.update_idletasks()
+        except ValueError as e:
+            error_msg = f"Invalid input: {str(e)}"
+            print(error_msg)
+            log_error(error_msg)
+            status_label.config(text="Error: Invalid input")
+            messagebox.showerror("Error", error_msg)
+
+    return frame
+
 def switch_mode(mode, frames, main_frame, canvas, root):
     for frame in frames.values():
         frame.grid_forget()
@@ -682,7 +753,7 @@ def switch_mode(mode, frames, main_frame, canvas, root):
     # Resize window based on mode
     if mode == "Data Collection":
         root.geometry("900x600")
-    else:  # Image Assembly or Slew Tool
+    else:  # Image Assembly, Slew Tool, or Calculators
         root.geometry("600x400")
     main_frame.update_idletasks()
     canvas.update_idletasks()
@@ -740,7 +811,8 @@ try:
     frames = {
         "Data Collection": create_data_collection_frame(main_frame, root, log_text),
         "Image Assembly": create_image_assembly_frame(main_frame, root, log_text),
-        "Slew Tool": create_slew_tool_frame(main_frame, root, log_text)
+        "Slew Tool": create_slew_tool_frame(main_frame, root, log_text),
+        "Calculators": create_calculators_frame(main_frame, root, log_text)
     }
     frames["Data Collection"].grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
     print("Mode frames created.")

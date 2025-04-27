@@ -45,7 +45,7 @@ Step 3: Set the ASCOM driver that your telescope uses. (If you don't know, it's 
 
 Step 4: Input your desired image dimension. (Grid width is # of pixels wide, grid height is # of pixels tall)
 
-Step 5: Input grid spacing. (Use your dish beam width)
+Step 5: Input grid spacing. (Use the built in calculator mode to calculate spacing, we suggest a 30% overlap)
 
 Step 6: Input desired averaging time. (Going over 2 seconds may cause errors)
 
