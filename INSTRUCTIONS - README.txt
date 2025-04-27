@@ -58,6 +58,9 @@ Step 9: Select where you want the data to be stored. (Will be a singular .JSON f
 Step 10: Press begin scan.
 
 
+Note: The live visualizer to show the data recording progress may not actually represent the colors in the final image. Due to how the graph is displaying its color range, it struggles to do this dynamically while new data is arriving. However the visualizer is still usable to know image progress.
+
+
 
 -Image Generation-
 

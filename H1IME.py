@@ -4,6 +4,7 @@ import os
 import json
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import win32com.client
 import time
 from rtlsdr import RtlSdr
@@ -180,7 +181,54 @@ def save_measurement(data: dict, folder: str):
         log_error(error_msg)
         raise
 
-def run_grid_scan(root, status_label, start_button):
+def initialize_plot(grid_width, grid_height, points):
+    fig, ax = plt.subplots(figsize=(4, 4))
+    grid = np.full((grid_height, grid_width), np.nan)  # Initialize with NaN for unvisited points
+    ra_values = [ra for ra, _ in points]
+    dec_values = [dec for _, dec in points]
+    extent = [
+        min(ra_values) - grid_spacing / 2,
+        max(ra_values) + grid_spacing / 2,
+        min(dec_values) - grid_spacing / 2,
+        max(dec_values) + grid_spacing / 2
+    ]
+    im = ax.imshow(grid, cmap='viridis', origin='lower', extent=extent, interpolation='nearest')
+    ax.set_title('Live Scan Progress')
+    ax.set_xlabel('Right Ascension (deg)')
+    ax.set_ylabel('Declination (deg)')
+    plt.colorbar(im, ax=ax, label='Intensity (dB)')
+    return fig, ax, im, grid
+
+def update_plot(ax, im, grid, ra, dec, intensity, points, grid_width, grid_height, canvas_widget):
+    # Compute grid indices based on RA/Dec
+    ra_values = [ra for ra, _ in points]
+    dec_values = [dec for _, dec in points]
+    ra_min, ra_max = min(ra_values), max(ra_values)
+    dec_min, dec_max = min(dec_values), max(dec_values)
+    
+    # Linearly map RA/Dec to grid indices
+    ra_idx = int(((ra - ra_min) / (ra_max - ra_min)) * (grid_width - 1)) if ra_max != ra_min else 0
+    dec_idx = int(((dec - dec_min) / (dec_max - dec_min)) * (grid_height - 1)) if dec_max != dec_min else 0
+    
+    # Update grid and color scale
+    if 0 <= ra_idx < grid_width and 0 <= dec_idx < grid_height:
+        grid[dec_idx, ra_idx] = intensity
+        valid_data = grid[~np.isnan(grid)]
+        if valid_data.size == 0:
+            # First data point: set vmin and vmax to intensity
+            vmin = vmax = intensity
+        else:
+            vmin = np.min(valid_data)
+            vmax = np.max(valid_data)
+        im.set_clim(vmin, vmax)
+        print(f"Updated color scale: vmin={vmin:.2f}, vmax={vmax:.2f}")
+        im.set_array(grid)
+        canvas_widget.draw()
+        print(f"Updated plot: RA={ra:.2f}, Dec={dec:.2f}, RA_idx={ra_idx}, Dec_idx={dec_idx}, Intensity={intensity:.2f} dB")
+    else:
+        print(f"Warning: Point RA={ra:.2f}, Dec={dec:.2f} maps to invalid indices RA_idx={ra_idx}, Dec_idx={dec_idx}")
+
+def run_grid_scan(root, status_label, start_button, plot_frame, canvas_widget, fig, ax, im, grid, points):
     global output_folder, grid_width, grid_height, grid_spacing, sdr_sample_rate, sdr_center_freq, sdr_gain, settle_time, telescope_progid
     try:
         # Connect to telescope and get current position
@@ -191,7 +239,6 @@ def run_grid_scan(root, status_label, start_button):
         root.update_idletasks()
 
         # Generate grid points centered on current position
-        points = iterative_spiral(initial_ra, initial_dec, grid_width, grid_height, grid_spacing)
         sdr = setup_sdr(sdr_sample_rate, sdr_center_freq, sdr_gain)
         measurements = {
             'sample_rate': sdr_sample_rate,
@@ -216,6 +263,8 @@ def run_grid_scan(root, status_label, start_button):
                 sdr.close()
                 start_button.config(state="normal")
                 status_label.config(text="Idle")
+                for widget in plot_frame.winfo_children():
+                    widget.destroy()  # Clear plot after completion
                 return
             ra, dec = points[i]
             status_label.config(text=f"Slewing to Position {i + 1}/{grid_width*grid_height}: RA: {ra:.2f}, Dec: {dec:.2f}")
@@ -229,6 +278,8 @@ def run_grid_scan(root, status_label, start_button):
                 log_error(error_msg)
                 status_label.config(text="Error: Slew failed. Check log.")
                 start_button.config(state="normal")
+                for widget in plot_frame.winfo_children():
+                    widget.destroy()
                 messagebox.showerror("Error", error_msg)
                 return
 
@@ -242,11 +293,12 @@ def run_grid_scan(root, status_label, start_button):
                         log_error(error_msg)
                         status_label.config(text="Error: Slew timeout. Check log.")
                         start_button.config(state="normal")
+                        for widget in plot_frame.winfo_children():
+                            widget.destroy()
                         messagebox.showerror("Error", error_msg)
                     else:
                         status_label.config(text=f"Settling for {settle_time}s at Position {i + 1}/{grid_width*grid_height}")
                         root.update_idletasks()
-                        # Schedule settle time non-blocking
                         root.after(int(settle_time * 1000), lambda: measure_and_proceed(i))
                 except Exception as e:
                     error_msg = f"Error during slew at position {i + 1}: {str(e)}"
@@ -254,6 +306,8 @@ def run_grid_scan(root, status_label, start_button):
                     log_error(error_msg)
                     status_label.config(text="Error: Operation failed. Check log.")
                     start_button.config(state="normal")
+                    for widget in plot_frame.winfo_children():
+                        widget.destroy()
                     messagebox.showerror("Error", error_msg)
 
             def measure_and_proceed(i):
@@ -268,6 +322,8 @@ def run_grid_scan(root, status_label, start_button):
                         'TIME': datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                     })
                     print(f'\nData recorded at position {i + 1} out of {grid_width*grid_height}: \nRA: {ra:.2f} deg, \nDec: {dec:.2f} deg, \nHydrogen Line Strength: {hydrogen_line_power_db:.2f} dB\n\n')
+                    # Update the live plot
+                    update_plot(ax, im, grid, ra, dec, hydrogen_line_power_db, points, grid_width, grid_height, canvas_widget)
                     root.after(100, process_point, i + 1)
                 except Exception as e:
                     error_msg = f"Error during measurement at position {i + 1}: {str(e)}"
@@ -275,6 +331,8 @@ def run_grid_scan(root, status_label, start_button):
                     log_error(error_msg)
                     status_label.config(text="Error: Operation failed. Check log.")
                     start_button.config(state="normal")
+                    for widget in plot_frame.winfo_children():
+                        widget.destroy()
                     messagebox.showerror("Error", error_msg)
 
             root.after(100, wait_for_slew, 0)
@@ -286,6 +344,8 @@ def run_grid_scan(root, status_label, start_button):
         log_error(error_msg)
         status_label.config(text="Error occurred. Check log.")
         start_button.config(state="normal")
+        for widget in plot_frame.winfo_children():
+            widget.destroy()
         messagebox.showerror("Error", f"Scan failed: {str(e)}")
 
 # Image Assembly functions
@@ -399,6 +459,8 @@ def validate_coordinates(ra_str, dec_str):
 
 def create_data_collection_frame(parent, root, log_text):
     frame = ttk.LabelFrame(parent, text="Data Collection", padding="5")
+    frame.columnconfigure(0, weight=1)
+    frame.columnconfigure(1, weight=1)
     
     # Telescope Settings
     telescope_frame = ttk.LabelFrame(frame, text="Telescope Settings", padding="5")
@@ -457,15 +519,20 @@ def create_data_collection_frame(parent, root, log_text):
     folder_label = ttk.Label(output_frame, text="Output Folder: Not Selected")
     folder_label.grid(row=1, column=0, columnspan=2, pady=5)
 
+    # Plot Frame (always visible in Data Collection mode)
+    plot_frame = ttk.LabelFrame(frame, text="Live Scan Visualization", padding="5")
+    plot_frame.grid(row=0, column=1, rowspan=4, sticky=(tk.N, tk.S, tk.E, tk.W), padx=5, pady=5)
+    ttk.Label(plot_frame, text="Scan not started").pack(pady=10)  # Placeholder text
+
     # Control and Status
     control_frame = ttk.Frame(frame)
     control_frame.grid(row=4, column=0, sticky=(tk.W, tk.E), pady=10)
-    start_button = ttk.Button(control_frame, text="Start Scan", command=lambda: start_scan(root, status_label, start_button, width_entry, height_entry, spacing_entry, avg_time_entry, center_freq_entry, sample_rate_entry, gain_entry, settle_time_entry, driver_combobox))
+    start_button = ttk.Button(control_frame, text="Start Scan", command=lambda: start_scan(root, status_label, start_button, width_entry, height_entry, spacing_entry, avg_time_entry, center_freq_entry, sample_rate_entry, gain_entry, settle_time_entry, driver_combobox, plot_frame))
     start_button.grid(row=0, column=0, padx=5)
     status_label = ttk.Label(control_frame, text="Idle")
     status_label.grid(row=0, column=1, padx=5)
 
-    def start_scan(root, status_label, start_button, width_entry, height_entry, spacing_entry, avg_time_entry, center_freq_entry, sample_rate_entry, gain_entry, settle_time_entry, driver_combobox):
+    def start_scan(root, status_label, start_button, width_entry, height_entry, spacing_entry, avg_time_entry, center_freq_entry, sample_rate_entry, gain_entry, settle_time_entry, driver_combobox, plot_frame):
         global grid_width, grid_height, grid_spacing, readings_per_measurement, sdr_center_freq, sdr_sample_rate, sdr_gain, settle_time, telescope_progid
         try:
             grid_width = int(width_entry.get())
@@ -491,7 +558,19 @@ def create_data_collection_frame(parent, root, log_text):
         start_button.config(state="disabled")
         status_label.config(text="Starting scan...")
         root.update_idletasks()
-        run_grid_scan(root, status_label, start_button)
+        
+        # Initialize the plot
+        for widget in plot_frame.winfo_children():
+            widget.destroy()  # Clear placeholder
+        telescope = connect_to_telescope(telescope_progid)
+        initial_ra, initial_dec = get_current_position(telescope)
+        points = iterative_spiral(initial_ra, initial_dec, grid_width, grid_height, grid_spacing)
+        fig, ax, im, grid = initialize_plot(grid_width, grid_height, points)
+        canvas_widget = FigureCanvasTkAgg(fig, master=plot_frame)
+        canvas_widget.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        root.update_idletasks()
+        
+        run_grid_scan(root, status_label, start_button, plot_frame, canvas_widget, fig, ax, im, grid, points)
 
     return frame
 
@@ -596,10 +675,15 @@ def create_slew_tool_frame(parent, root, log_text):
 
     return frame
 
-def switch_mode(mode, frames, main_frame, canvas):
+def switch_mode(mode, frames, main_frame, canvas, root):
     for frame in frames.values():
         frame.grid_forget()
     frames[mode].grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+    # Resize window based on mode
+    if mode == "Data Collection":
+        root.geometry("900x600")
+    else:  # Image Assembly or Slew Tool
+        root.geometry("600x400")
     main_frame.update_idletasks()
     canvas.update_idletasks()
     canvas.configure(scrollregion=canvas.bbox("all"))
@@ -609,7 +693,7 @@ try:
     print("Initializing GUI...")
     root = tk.Tk()
     root.title("Radio Astronomy Master Controller")
-    root.geometry("600x600")
+    root.geometry("900x600")  # Start with Data Collection size
     root.resizable(False, False)
     print("Root window created.")
 
@@ -662,7 +746,7 @@ try:
     print("Mode frames created.")
 
     # Bind mode switch
-    mode_combobox.bind("<<ComboboxSelected>>", lambda event: switch_mode(mode_combobox.get(), frames, main_frame, canvas))
+    mode_combobox.bind("<<ComboboxSelected>>", lambda event: switch_mode(mode_combobox.get(), frames, main_frame, canvas, root))
     print("Mode switch bound.")
 
     # Update canvas scroll region after initial layout
