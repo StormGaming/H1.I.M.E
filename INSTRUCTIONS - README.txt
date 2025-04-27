@@ -1,53 +1,70 @@
-H1.I.M.E (Hydrogen-1 Imaging Made Easy) is owned by KOIOS Aerospace, please contact us at: KOIOS.Aerospace@gmail.com if you have any issues or go to KOIOSAerospace.com for more information about us.
+Welcome to H1IME, which stands for Hydrogen 1 Imaging Made Easy! This program uses an ASCOM motorized telescope mount to position and manage a radio telescope. And uses an RTLSDR to collect data and then turn it into an image!
+
+
 
 This software would have been completely impossible without the help from Ryan Fav (Discord: ryanfav). Thank you so much!
-Also, this would have been extremely hard to do without the assistance from ChatGPT v4.0 so thank you to the team at OpenAi for making such a powerful and publicly available tool!
+Also, this would have been extremely hard to do without the assistance from ChatGPT v4.0 and Grok 3.0 so thank you to the team at OpenAi and Grok for making such a powerful tool!
+
+
+
+
 
 
 --------HOW TO USE--------
 
-H1.I.M.E is pretty straightforward and simple but the most important thing to mention is: 
-This software is setup to use the driver "EQMOD.Telescope". It will be possible to modify the code to use your driver if necessary but otherwise you're out of luck.
+H1.I.M.E is pretty straightforward and simple but here is a rundown on how to use it:
 
-Also please note, please do not modify any of the other code.
+Also please note: while this program is available on GitHub, we'd prefer for you to not take the code and modify it for yourself. However if something isn't working and you need technical support on it, you may email or message on Discord at any time.
+
+Fast reply email (will reply within 10 hours 24/7): morgpro1@gmail.com
+Discord (will reply within 10 hours 24/7): _stormgaming
+
+
+If you do wish to make your own adaptations on the code, please check with one of those contacts and ask for permission, also make sure to give credit where credit is due.
 
 
 
 -Installation-
 
 Please run the 'Dependencies Installer.bat' file AS ADMINISTRATOR.
-This will install Python as well as the other dependencies for this program.
+This will install Python as well as the other dependencies for this program. 
 
-
--Notes-
-
-The 'Position Recenter.py' file will command the mount to point at RA: 0.0 and DEC: 0.0. NOT at the center of the scan grid.
-
-The GUI window status updates will always be 1 grid position BEHIND what is actually happening. E.g: grid position 4 slew announcement only happens AFTER it has finished with the datapoint and begun the slew to position 5.
+Note: If the command prompt window is only a few lines long and not pages of text, and that doesn't change within about a minute, just install Python from the Microsoft Store, then run the script again.
 
 
 
--Data Acquisition-
 
-Step 1: Power on your rig and ensure EQMOD is updated with the position of the telescope and it is correct (through checking the position with a plate-solver such as ASTAP).
 
-Step 2: Slew the telescope to the target position of your choice through a different software (such as N.I.N.A).
+-Data Collection-
 
-Step 3: Run the 'Data Collection.py' file, this will open up and connect to your SDR as well as open a GUI.
+Step 1: Run the "H1IME.py" file.
 
-Step 4: Input your desired grid size and spacing (if you don't know what spacing to use, use whatever FOV your dish's beam has), as well as maximum averaging time (Going over 2 seconds averaging time may induce errors).
+Step 2: Select the "Data Collection" mode.
 
-Step 5: Press 'Select Output Folder' and choose the desired directory for where the program will store the gathered data.
+Step 3: Set the ASCOM driver that your telescope uses. (If you don't know, it's probably the first one)
 
-Step 6: Press 'Start Scan', this will tell the mount to slew to the first grid position, record the data, then slew again to the next point...etc
+Step 4: Input your desired image dimension. (Grid width is # of pixels wide, grid height is # of pixels tall)
+
+Step 5: Input grid spacing. (Use your dish beam width)
+
+Step 6: Input desired averaging time. (Going over 2 seconds may cause errors)
+
+Step 7: Input settle time. (2 seconds works for most setups, have longer settle time for high magnification setups)
+
+Step 8: Input center frequency, sample rate, and gain of the SDR. (Defaults work for most setups)
+
+Step 9: Select where you want the data to be stored. (Will be a singular .JSON file)
+
+Step 10: Press begin scan.
+
 
 
 -Image Generation-
 
-After the data has been gathered, it is time to plot an image from it!
+Once the data is collected and the .JSON file was generated, switch modes to "Image Assembly". Then simply press the "Select JSON File" button, select the data file that was previously generated. And it will open up a window and display the image that is generated.
 
-Step 1: Run the 'Image Assembler.py' file, this will open a small GUI.
 
-Step 2: Press 'Select JSON File' and select the file that the data collection program outputted after it finished running.
 
-After you press 'select' on file explorer, it will then generate and display the image on-screen. Save it by pressing the save icon in the bottom of the window and saving like a normal file.
+-Slew Tool-
+
+To allow ease of use, there is also a "Slew Tool", which allows you to input RA/DEC coordinates for easy slew and position control.
