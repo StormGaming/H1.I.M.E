@@ -26,10 +26,12 @@ If you do wish to make your own adaptations on the code, please check with one o
 
 -Installation-
 
-Please run the 'Dependencies Installer.bat' file AS ADMINISTRATOR.
-This will install Python as well as the other dependencies for this program. 
+Please run the 'Installer.bat' file AS ADMINISTRATOR.
+This will install Python as well as the other dependencies for this program. This will take a few minutes.
 
-Note: If the command prompt window is only a few lines long and not pages of text, and that doesn't change within about a minute, just install Python from the Microsoft Store, then run the script again.
+Note: If the command prompt window gives an error saying "python is inaccessible" or "failed to find python" but it says "python installed successfully" above it. Just close the installer and re-run it. If the issue persists, uninstall python using the windows Add or Remove Programs window and try again. If that doesn't work either, please contact one of the support contacts.
+
+Also please note that it is unknown if this program works with any other Python version other than 3.11.9, if this isn't working for you, try changing to v3.11.9.
 
 
 
@@ -37,7 +39,7 @@ Note: If the command prompt window is only a few lines long and not pages of tex
 
 -Data Collection-
 
-Step 1: Run the "H1IME.py" file.
+Step 1: Right click the "H1IME.py" file and open with Python 3.11.9.
 
 Step 2: Select the "Data Collection" mode.
 

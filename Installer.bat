@@ -54,22 +54,38 @@ if %ERRORLEVEL% NEQ 0 (
         exit /b 1
     )
 
+    REM Refresh environment variables for the current session
+    echo Refreshing environment variables... >> "%LOGFILE%"
+    echo Refreshing environment variables...
+    for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "PATH=%%B"
+    set "PATH=%PATH%;C:\Program Files\Python311;C:\Program Files\Python311\Scripts"
+    setx PATH "%PATH%" >nul 2>&1
+
+    REM Brief delay to ensure installer completion
+    ping 127.0.0.1 -n 3 >nul
+
     REM No cleanup needed since we're not downloading
     echo Python installed successfully. >> "%LOGFILE%"
     echo Python installed successfully.
-
-    REM Refresh environment variables
-    set "PATH=%PATH%;C:\Program Files\Python311;C:\Program Files\Python311\Scripts"
 ) else (
     echo Python is already installed. >> "%LOGFILE%"
     echo Python is already installed.
 )
 
 REM Verify Python is accessible
-python --version >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo Python is not accessible after installation. Please check the installation. >> "%LOGFILE%"
-    echo Python is not accessible after installation. Please check the installation.
+echo Verifying Python installation... >> "%LOGFILE%"
+if exist "C:\Program Files\Python311\python.exe" (
+    "C:\Program Files\Python311\python.exe" --version >nul 2>&1
+    if !ERRORLEVEL! NEQ 0 (
+        echo Python is installed but not accessible. Please check the installation. >> "%LOGFILE%"
+        echo Python is installed but not accessible. Please check the installation.
+        pause
+        exit /b 1
+    )
+    echo Python is accessible at C:\Program Files\Python311\python.exe. >> "%LOGFILE%"
+) else (
+    echo Python executable not found at C:\Program Files\Python311\python.exe. >> "%LOGFILE%"
+    echo Python executable not found. Please check the installation.
     pause
     exit /b 1
 )
