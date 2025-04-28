@@ -25,45 +25,41 @@ python --version >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo Python is not installed. >> "%LOGFILE%"
     echo Python is not installed.
-    echo Downloading Python 3.9.6 installer...
+    echo Checking for Python 3.11.9 installer in lib\python...
 
-    REM Download Python installer with retry logic
-    set "URL=https://www.python.org/ftp/python/3.9.6/python-3.9.6-amd64.exe"
-    set "RETRIES=3"
-    set "SUCCESS=0"
-    for /L %%i in (1,1,%RETRIES%) do (
-        if !SUCCESS! EQU 0 (
-            echo Attempt %%i of %RETRIES% to download Python installer... >> "%LOGFILE%"
-            powershell -Command "(New-Object Net.WebClient).DownloadFile('%URL%', 'python-installer.exe')" && set "SUCCESS=1" || (
-                echo Download attempt %%i failed. >> "%LOGFILE%"
-            )
-        )
-    )
-    if !SUCCESS! EQU 0 (
-        echo Failed to download Python installer after %RETRIES% attempts. >> "%LOGFILE%"
-        echo Failed to download Python installer.
+    REM Check for Python installer in lib\python
+    set "INSTALLER_PATH=%CURDIR%\lib\python\python-3.11.9-amd64.exe"
+    if not exist "!INSTALLER_PATH!" (
+        echo Python 3.11.9 installer not found at !INSTALLER_PATH!. >> "%LOGFILE%"
+        echo Python 3.11.9 installer not found in lib\python.
+        echo Please place python-3.11.9-amd64.exe in the lib\python folder.
+        echo Download it from: https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe
         pause
         exit /b 1
     )
+    echo Found Python 3.11.9 installer at !INSTALLER_PATH!. >> "%LOGFILE%"
+    echo Found Python 3.11.9 installer.
 
-    REM Install Python silently
+    REM Install Python silently with detailed logging
     echo Installing Python... >> "%LOGFILE%"
     echo Installing Python...
-    start /wait python-installer.exe /quiet InstallAllUsers=1 PrependPath=1 TargetDir="C:\Program Files\Python39" || (
-        echo Failed to install Python. >> "%LOGFILE%"
-        echo Failed to install Python.
-        del python-installer.exe
+    start /wait "" "!INSTALLER_PATH!" /quiet InstallAllUsers=1 PrependPath=1 TargetDir="C:\Program Files\Python311" > "%LOGFILE%.python_install.log" 2>&1
+    if !ERRORLEVEL! NEQ 0 (
+        echo Failed to install Python. Check %LOGFILE%.python_install.log for details. >> "%LOGFILE%"
+        echo Failed to install Python. Check the log file for details.
+        echo Installer path: !INSTALLER_PATH!
+        echo Please ensure the installer is valid and not corrupted.
+        echo Download a fresh copy from: https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe
         pause
         exit /b 1
     )
 
-    REM Clean up
-    del python-installer.exe
+    REM No cleanup needed since we're not downloading
     echo Python installed successfully. >> "%LOGFILE%"
     echo Python installed successfully.
 
     REM Refresh environment variables
-    set "PATH=%PATH%;C:\Program Files\Python39;C:\Program Files\Python39\Scripts"
+    set "PATH=%PATH%;C:\Program Files\Python311;C:\Program Files\Python311\Scripts"
 ) else (
     echo Python is already installed. >> "%LOGFILE%"
     echo Python is already installed.
@@ -110,7 +106,7 @@ echo Python packages installed successfully.
 REM Set the librtlsdr source and target directory paths
 set "LIBRTLSDR_SRC=%CURDIR%\lib\rtl-sdr-64bit"
 set "LIBRTLSDR_DEST=C:\Program Files\librtlsdr"
-set "PYTHON_SCRIPTS=C:\Program Files\Python39\Scripts"
+set "PYTHON_SCRIPTS=C:\Program Files\Python311\Scripts"
 
 REM Check if the source librtlsdr directory exists
 if exist "%LIBRTLSDR_SRC%" (
@@ -205,10 +201,5 @@ if exist "%LIBRTLSDR_SRC%" (
 echo. >> "%LOGFILE%"
 echo Installation completed successfully. >> "%LOGFILE%"
 echo Installation completed successfully.
-echo If the program still fails with 'failed to import librtlsdr', try:
-echo 1. Copying %LIBRTLSDR_SRC%\*.dll to the same folder as H1IME.py.
-echo 2. Rebooting your system to refresh the PATH.
-echo 3. Verifying %LIBRTLSDR_DEST% and C:\Windows\System32 contain librtlsdr.dll and libusb-1.0.dll.
-echo 4. Running 'python -c "from rtlsdr import RtlSdr"' to test pyrtlsdr.
 pause
 exit /b 0
