@@ -59,12 +59,27 @@ if %ERRORLEVEL% NEQ 0 (
     echo Refreshing environment variables...
     for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "PATH=%%B"
     set "PATH=%PATH%;C:\Program Files\Python311;C:\Program Files\Python311\Scripts"
-    setx PATH "%PATH%" >nul 2>&1
 
     REM Brief delay to ensure installer completion
     ping 127.0.0.1 -n 3 >nul
 
-    REM No cleanup needed since we're not downloading
+    REM Verify Python is accessible after PATH update
+    python --version >nul 2>&1
+    if !ERRORLEVEL! NEQ 0 (
+        echo Python still not accessible after PATH update. Retrying... >> "%LOGFILE%"
+        echo Python still not accessible. Retrying...
+        REM Try refreshing PATH again
+        for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "PATH=%%B"
+        set "PATH=%PATH%;C:\Program Files\Python311;C:\Program Files\Python311\Scripts"
+        python --version >nul 2>&1
+        if !ERRORLEVEL! NEQ 0 (
+            echo Failed to access Python after installation. >> "%LOGFILE%"
+            echo Failed to access Python. Please restart the script or reboot the system.
+            pause
+            exit /b 1
+        )
+    )
+
     echo Python installed successfully. >> "%LOGFILE%"
     echo Python installed successfully.
 ) else (
@@ -199,6 +214,8 @@ if exist "%LIBRTLSDR_SRC%" (
             pause
             exit /b 1
         )
+        REM Update current session PATH
+        set "PATH=%currentPath%;%LIBRTLSDR_DEST%"
     ) else (
         echo %LIBRTLSDR_DEST% already in system PATH. >> "%LOGFILE%"
         echo %LIBRTLSDR_DEST% already in system PATH.
@@ -215,7 +232,10 @@ if exist "%LIBRTLSDR_SRC%" (
 )
 
 echo. >> "%LOGFILE%"
-echo Installation completed successfully. >> "%LOGFILE%"
+echo Deleting log files... >> "%LOGFILE%"
+cd /D "%~dp0"
+del "%LOGFILE%" >nul 2>&1
+del "%LOGFILE%.python_install.log" >nul 2>&1
 echo Installation completed successfully.
 pause
 exit /b 0
