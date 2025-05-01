@@ -23,6 +23,7 @@ readings_per_measurement = 5
 sdr_sample_rate = 250e3  # Hz
 sdr_center_freq = 1.42e9  # Hz
 sdr_gain = 40
+sdr_bandwidth = 10000  # Hz (new variable for frequency range)
 settle_time = 2  # seconds
 telescope_progid = "EQMOD.Telescope"
 
@@ -153,15 +154,46 @@ def setup_sdr(sample_rate, center_frequency, gain):
         log_error(error_msg)
         raise
 
-def measure_point(sdr, num_samples=1024 * 1024):
+def measure_point(sdr, readings_per_measurement, num_samples=256000, freq_range=10000):
+    """
+    Measure the hydrogen line power at the current position, averaging over multiple measurements.
+    
+    Parameters:
+    - sdr: RtlSdr object, configured for measurement.
+    - readings_per_measurement: Total averaging time in seconds (from GUI).
+    - num_samples: Number of samples per individual measurement (default: 256,000).
+    - freq_range: Frequency range (Hz) around center_freq to integrate (default: ±10 kHz).
+    
+    Returns:
+    - hydrogen_line_power_db: Averaged power in dB.
+    """
     try:
-        samples = sdr.read_samples(num_samples)
-        fft_result = np.fft.fftshift(np.fft.fft(samples))
-        freqs = np.fft.fftshift(np.fft.fftfreq(len(samples), 1 / sdr.sample_rate)) + sdr.center_freq
-        power_spectrum = np.abs(fft_result) ** 2
-        hydrogen_freq_index = np.argmin(np.abs(freqs - sdr.center_freq))
-        hydrogen_line_power = power_spectrum[hydrogen_freq_index]
-        hydrogen_line_power_db = 10 * np.log10(hydrogen_line_power + 1e-10)
+        # Calculate number of measurements based on averaging time
+        time_per_measurement = num_samples / sdr.sample_rate  # Time for one measurement
+        num_measurements = max(1, int(readings_per_measurement / time_per_measurement))
+        print(f"Performing {num_measurements} measurements, each {time_per_measurement:.3f}s")
+        
+        power_values = []
+        for _ in range(num_measurements):
+            # Collect samples
+            samples = sdr.read_samples(num_samples)
+            # Compute FFT and power spectrum
+            fft_result = np.fft.fftshift(np.fft.fft(samples))
+            freqs = np.fft.fftshift(np.fft.fftfreq(len(samples), 1 / sdr.sample_rate)) + sdr.center_freq
+            power_spectrum = np.abs(fft_result) ** 2
+            # Select frequency range around center frequency
+            freq_mask = (sdr.center_freq - freq_range <= freqs) & (freqs <= sdr.center_freq + freq_range)
+            if not np.any(freq_mask):
+                raise ValueError("No frequencies in the specified range")
+            # Sum power in the selected frequency range (in linear units)
+            total_power = np.sum(power_spectrum[freq_mask])
+            power_values.append(total_power)
+        
+        # Average power in linear units
+        avg_power = np.mean(power_values)
+        # Convert to dB, adding small constant to avoid log(0)
+        hydrogen_line_power_db = 10 * np.log10(avg_power + 1e-10)
+        print(f"Averaged power: {hydrogen_line_power_db:.2f} dB from {num_measurements} measurements")
         return hydrogen_line_power_db
     except Exception as e:
         error_msg = f"Error measuring point: {str(e)}"
@@ -230,7 +262,7 @@ def update_plot(ax, im, grid, ra, dec, intensity, points, grid_width, grid_heigh
         print(f"Warning: Point RA={ra:.2f}, Dec={dec:.2f} maps to invalid indices RA_idx={ra_idx}, Dec_idx={dec_idx}")
 
 def run_grid_scan(root, status_label, start_button, plot_frame, canvas_widget, fig, ax, im, grid, points):
-    global output_folder, grid_width, grid_height, grid_spacing, sdr_sample_rate, sdr_center_freq, sdr_gain, settle_time, telescope_progid
+    global output_folder, grid_width, grid_height, grid_spacing, sdr_sample_rate, sdr_center_freq, sdr_gain, sdr_bandwidth, settle_time, telescope_progid, readings_per_measurement
     try:
         # Connect to telescope and get current position
         telescope = connect_to_telescope(telescope_progid)
@@ -245,6 +277,7 @@ def run_grid_scan(root, status_label, start_button, plot_frame, canvas_widget, f
             'sample_rate': sdr_sample_rate,
             'center_frequency': sdr_center_freq,
             'gain': sdr_gain,
+            'bandwidth': sdr_bandwidth,
             'grid_width': grid_width,
             'grid_height': grid_height,
             'grid_spacing': grid_spacing,
@@ -315,7 +348,8 @@ def run_grid_scan(root, status_label, start_button, plot_frame, canvas_widget, f
                 try:
                     status_label.config(text=f"Measuring at Position {i + 1}/{grid_width*grid_height}: RA: {ra:.2f}, Dec: {dec:.2f}")
                     root.update_idletasks()
-                    hydrogen_line_power_db = measure_point(sdr)
+                    # Updated call to measure_point with readings_per_measurement and sdr_bandwidth
+                    hydrogen_line_power_db = measure_point(sdr, readings_per_measurement, freq_range=sdr_bandwidth)
                     readings.append({
                         'RA': ra,
                         'DEC': dec,
@@ -497,11 +531,11 @@ def create_data_collection_frame(parent, root, log_text):
     spacing_entry = ttk.Entry(grid_frame, width=15)
     spacing_entry.insert(0, "2")
     spacing_entry.grid(row=2, column=1, sticky=tk.W, padx=5, pady=2)
-    ttk.Label(grid_frame, text="Averaging Time (s):").grid(row=3, column=0, sticky=tk.W, padx=5, pady=2)
+    ttk.Label(grid_frame, text="Total Averaging Time (s):").grid(row=3, column=0, sticky=tk.W, padx=5, pady=2)
     avg_time_entry = ttk.Entry(grid_frame, width=15)
     avg_time_entry.insert(0, "2")
     avg_time_entry.grid(row=3, column=1, sticky=tk.W, padx=5, pady=2)
-    ttk.Label(grid_frame, text="(Max 2s to avoid errors)").grid(row=3, column=2, sticky=tk.W, padx=5, pady=2)
+    ttk.Label(grid_frame, text="(Using more than 15s could cause excessive heating)").grid(row=3, column=2, sticky=tk.W, padx=5, pady=2)
     ttk.Label(grid_frame, text="Settle Time (s):").grid(row=4, column=0, sticky=tk.W, padx=5, pady=2)
     settle_time_entry = ttk.Entry(grid_frame, width=15)
     settle_time_entry.insert(0, "2")
@@ -522,6 +556,10 @@ def create_data_collection_frame(parent, root, log_text):
     gain_entry = ttk.Entry(sdr_frame, width=15)
     gain_entry.insert(0, "40")
     gain_entry.grid(row=2, column=1, sticky=tk.W, padx=5, pady=2)
+    ttk.Label(sdr_frame, text="Bandwidth (Hz):").grid(row=3, column=0, sticky=tk.W, padx=5, pady=2)
+    bandwidth_entry = ttk.Entry(sdr_frame, width=15)
+    bandwidth_entry.insert(0, "10000")
+    bandwidth_entry.grid(row=3, column=1, sticky=tk.W, padx=5, pady=2)
 
     # Output Settings
     output_frame = ttk.LabelFrame(frame, text="Output Settings", padding="5")
@@ -539,13 +577,13 @@ def create_data_collection_frame(parent, root, log_text):
     # Control and Status
     control_frame = ttk.Frame(frame)
     control_frame.grid(row=4, column=0, sticky=(tk.W, tk.E), pady=10)
-    start_button = ttk.Button(control_frame, text="Start Scan", command=lambda: start_scan(root, status_label, start_button, width_entry, height_entry, spacing_entry, avg_time_entry, center_freq_entry, sample_rate_entry, gain_entry, settle_time_entry, driver_combobox, plot_frame))
+    start_button = ttk.Button(control_frame, text="Start Scan", command=lambda: start_scan(root, status_label, start_button, width_entry, height_entry, spacing_entry, avg_time_entry, center_freq_entry, sample_rate_entry, gain_entry, settle_time_entry, driver_combobox, plot_frame, bandwidth_entry))
     start_button.grid(row=0, column=0, padx=5)
     status_label = ttk.Label(control_frame, text="Idle")
     status_label.grid(row=0, column=1, padx=5)
 
-    def start_scan(root, status_label, start_button, width_entry, height_entry, spacing_entry, avg_time_entry, center_freq_entry, sample_rate_entry, gain_entry, settle_time_entry, driver_combobox, plot_frame):
-        global grid_width, grid_height, grid_spacing, readings_per_measurement, sdr_center_freq, sdr_sample_rate, sdr_gain, settle_time, telescope_progid
+    def start_scan(root, status_label, start_button, width_entry, height_entry, spacing_entry, avg_time_entry, center_freq_entry, sample_rate_entry, gain_entry, settle_time_entry, driver_combobox, plot_frame, bandwidth_entry):
+        global grid_width, grid_height, grid_spacing, readings_per_measurement, sdr_center_freq, sdr_sample_rate, sdr_gain, settle_time, telescope_progid, sdr_bandwidth
         try:
             grid_width = int(width_entry.get())
             grid_height = int(height_entry.get())
@@ -555,11 +593,14 @@ def create_data_collection_frame(parent, root, log_text):
             sdr_sample_rate = float(sample_rate_entry.get())
             sdr_gain = float(gain_entry.get())
             settle_time = float(settle_time_entry.get())
+            sdr_bandwidth = float(bandwidth_entry.get())
             telescope_progid = driver_combobox.get()
             if not telescope_progid:
                 raise ValueError("No telescope driver selected")
             if not output_folder:
                 raise ValueError("Output folder not selected")
+            if sdr_bandwidth <= 0:
+                raise ValueError("Bandwidth must be positive")
         except ValueError as e:
             error_msg = f"Invalid input values: {str(e)}"
             print(error_msg)
