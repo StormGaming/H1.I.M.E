@@ -535,7 +535,7 @@ def create_data_collection_frame(parent, root, log_text):
     avg_time_entry = ttk.Entry(grid_frame, width=15)
     avg_time_entry.insert(0, "2")
     avg_time_entry.grid(row=3, column=1, sticky=tk.W, padx=5, pady=2)
-    ttk.Label(grid_frame, text="(Using more than 15s could cause excessive heating)").grid(row=3, column=2, sticky=tk.W, padx=5, pady=2)
+    ttk.Label(grid_frame, text="(Using over 15s may cause the SDR to heat excessively)").grid(row=3, column=2, sticky=tk.W, padx=5, pady=2)
     ttk.Label(grid_frame, text="Settle Time (s):").grid(row=4, column=0, sticky=tk.W, padx=5, pady=2)
     settle_time_entry = ttk.Entry(grid_frame, width=15)
     settle_time_entry.insert(0, "2")
@@ -601,6 +601,12 @@ def create_data_collection_frame(parent, root, log_text):
                 raise ValueError("Output folder not selected")
             if sdr_bandwidth <= 0:
                 raise ValueError("Bandwidth must be positive")
+            if readings_per_measurement <= 0:
+                raise ValueError("Total averaging time must be positive")
+            if readings_per_measurement > 60:
+                if not messagebox.askokcancel("Warning", f"Averaging time of {readings_per_measurement}s is unusually long and may stress the system. Continue?"):
+                    status_label.config(text="Scan cancelled")
+                    return
         except ValueError as e:
             error_msg = f"Invalid input values: {str(e)}"
             print(error_msg)
@@ -818,6 +824,24 @@ try:
     root.rowconfigure(0, weight=1)
     root.columnconfigure(0, weight=1)
     print("Canvas and scrollbar configured.")
+
+    # Add mouse wheel and touchpad scrolling support
+    def on_mouse_scroll(event):
+        # Handle mouse wheel and two-finger scrolling
+        if event.delta:
+            # Windows and macOS: event.delta is positive for up, negative for down
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        elif event.num == 4:
+            # Linux: Button-4 is scroll up
+            canvas.yview_scroll(-1, "units")
+        elif event.num == 5:
+            # Linux: Button-5 is scroll down
+            canvas.yview_scroll(1, "units")
+
+    # Bind scroll events (cross-platform)
+    canvas.bind("<MouseWheel>", on_mouse_scroll)  # Windows and macOS
+    canvas.bind("<Button-4>", on_mouse_scroll)   # Linux scroll up
+    canvas.bind("<Button-5>", on_mouse_scroll)   # Linux scroll down
 
     # Create a frame inside the canvas
     main_frame = ttk.Frame(canvas, padding="10")
